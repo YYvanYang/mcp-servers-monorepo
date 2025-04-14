@@ -1,0 +1,18 @@
+{
+    "compilerOptions": {
+      // 基础编译选项，会被子包继承
+      "target": "ES2022",             // 目标 ECMAScript 版本
+      "module": "NodeNext",           // 模块系统
+      "moduleResolution": "NodeNext", // 模块解析策略
+      "strict": true,                 // 启用所有严格类型检查选项
+      "esModuleInterop": true,        // 允许从 CommonJS 模块进行默认导入
+      "skipLibCheck": true,           // 跳过声明文件的类型检查
+      "forceConsistentCasingInFileNames": true, // 强制文件名大小写一致
+      "resolveJsonModule": true,      // 允许导入 JSON 文件
+      "declaration": true,            // 生成 .d.ts 文件 (可选)
+      "declarationMap": true,         // 生成 .d.ts.map 文件 (可选)
+      "sourceMap": true               // 生成 .js.map 文件 (可选)
+    },
+    "include": [], // 根 tsconfig 不直接编译文件
+    "exclude": ["node_modules", "**/dist", "**/build"] // 排除这些目录
+  }

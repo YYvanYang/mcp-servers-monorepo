@@ -1,0 +1,24 @@
+{
+    "name": "mcp-servers-monorepo",
+    "version": "1.0.0",
+    "private": true,
+    "description": "A monorepo for MCP server implementations",
+    "license": "MIT",
+    "author": "Yvan",
+    "type": "module",
+    "workspaces": [
+      "src/*"
+    ],
+    "scripts": {
+      "build": "npm run build --workspaces --if-present",
+      "watch": "npm run watch --workspaces --if-present"
+    },
+    "devDependencies": {
+      "typescript": "^5.3.0",
+      "shx": "^0.3.4",
+      "@types/node": "^18.11.0"
+    },
+    "engines": {
+      "node": ">=18.0.0"
+    }
+  }
