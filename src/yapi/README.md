@@ -50,8 +50,8 @@ A Model Context Protocol (MCP) server for interacting with YAPI instances. This 
 
 This server requires the following environment variables to be set when running:
 
--   `YAPI_BASE_URL`: The base URL of your YAPI instance (e.g., `http://yapi.yourcompany.com`). **Crucially, this should *not* include `/api` or `/project/...` paths.** It's just the root domain and potentially a base path if YAPI isn't hosted at the root.
--   `YAPI_PROJECT_TOKEN`: The token for the specific YAPI project you want to access. Find this in your YAPI project settings under "Tokens".
+-   **`YAPI_BASE_URL`**: The **base URL** of your YAPI instance (e.g., `http://yapi.yourcompany.com` or `https://yapi.internal.net`). **Important:** Do *not* include `/api`, `/project/`, or any path beyond the domain/base path.
+-   **`YAPI_PROJECT_TOKEN`**: The token for the specific YAPI project you want to access. Find this in your YAPI project settings under "Tokens".
 -   `PORT` (Optional, for SSE mode): The port number for the SSE server to listen on. Defaults to 3000. Can also be set via `--port` argument.
 
 ### Command-Line Arguments
@@ -76,7 +76,7 @@ npm run build -w @mcp-servers/yapi # Build only the yapi package
 
 ```bash
 # Example:
-export YAPI_BASE_URL="https://yapi.example.com" # Corrected Base URL
+export YAPI_BASE_URL="https://yapi.example.com" # Correct Base URL
 export YAPI_PROJECT_TOKEN="YOUR_YAPI_PROJECT_TOKEN"
 # export PORT=4000 # Optional for SSE
 ```
@@ -115,8 +115,9 @@ Add the following configuration to your `claude_desktop_config.json` file.
         "--transport", "stdio" // Explicitly set stdio
       ],
       "env": {
-        "YAPI_BASE_URL": "https://yapi.example.com", // Correct base URL
+        "YAPI_BASE_URL": "https://yapi.example.com", // **** Correct base URL ****
         "YAPI_PROJECT_TOKEN": "YOUR_YAPI_PROJECT_TOKEN"
+        // Add any other necessary environment variables here, e.g., NODE_PATH
       }
     }
   }
@@ -158,7 +159,7 @@ Build the image first: `docker build -t your-dockerhub-username/mcp-server-yapi:
       "command": "docker",
       "args": [
         "run", "-i", "--rm",
-        "-e", "YAPI_BASE_URL=https://yapi.example.com", // Correct base URL
+        "-e", "YAPI_BASE_URL=https://yapi.example.com", // **** Correct base URL ****
         "-e", "YAPI_PROJECT_TOKEN=YOUR_YAPI_PROJECT_TOKEN",
         "your-dockerhub-username/mcp-server-yapi:latest", // Use your image name
         "--transport", "stdio" // Explicitly run in stdio mode inside container
