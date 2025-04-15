@@ -50,7 +50,7 @@ A Model Context Protocol (MCP) server for interacting with YAPI instances. This 
 
 This server requires the following environment variables to be set when running:
 
--   `YAPI_BASE_URL`: The base URL of your YAPI instance (e.g., `http://yapi.yourcompany.com`). Do **not** include `/api` or a trailing slash.
+-   `YAPI_BASE_URL`: The base URL of your YAPI instance (e.g., `http://yapi.yourcompany.com`). **Crucially, this should *not* include `/api` or `/project/...` paths.** It's just the root domain and potentially a base path if YAPI isn't hosted at the root.
 -   `YAPI_PROJECT_TOKEN`: The token for the specific YAPI project you want to access. Find this in your YAPI project settings under "Tokens".
 -   `PORT` (Optional, for SSE mode): The port number for the SSE server to listen on. Defaults to 3000. Can also be set via `--port` argument.
 
@@ -68,14 +68,15 @@ This server requires the following environment variables to be set when running:
 
 ```bash
 cd /path/to/mcp-servers-monorepo
-npm install
+npm install # Install dependencies for all workspaces
 npm run build -w @mcp-servers/yapi # Build only the yapi package
 ```
 
 **2. Set Environment Variables:**
 
 ```bash
-export YAPI_BASE_URL="YOUR_YAPI_INSTANCE_URL"
+# Example:
+export YAPI_BASE_URL="https://yapi.example.com" # Corrected Base URL
 export YAPI_PROJECT_TOKEN="YOUR_YAPI_PROJECT_TOKEN"
 # export PORT=4000 # Optional for SSE
 ```
@@ -100,7 +101,7 @@ export YAPI_PROJECT_TOKEN="YOUR_YAPI_PROJECT_TOKEN"
 
 Add the following configuration to your `claude_desktop_config.json` file.
 
-*Replace placeholders with your actual paths, YAPI URL, and token.*
+*Replace placeholders with your actual paths, **correct** YAPI Base URL, and token.*
 
 **STDIO Mode (Recommended for local single use):**
 
@@ -114,7 +115,7 @@ Add the following configuration to your `claude_desktop_config.json` file.
         "--transport", "stdio" // Explicitly set stdio
       ],
       "env": {
-        "YAPI_BASE_URL": "YOUR_YAPI_INSTANCE_URL",
+        "YAPI_BASE_URL": "https://yapi.example.com", // Correct base URL
         "YAPI_PROJECT_TOKEN": "YOUR_YAPI_PROJECT_TOKEN"
       }
     }
@@ -124,7 +125,7 @@ Add the following configuration to your `claude_desktop_config.json` file.
 
 **SSE Mode (Requires the server to be running separately):**
 
-First, start the server in SSE mode from your terminal (see "Running the Server" above).
+First, start the server in SSE mode from your terminal (see "Running the Server" above, ensuring correct environment variables are set).
 
 Then, configure Claude Desktop to connect via HTTP:
 
@@ -135,8 +136,8 @@ Then, configure Claude Desktop to connect via HTTP:
       "transport": {
           "type": "http",
           "url": "http://localhost:3000/sse" // Adjust port if needed
-      },
-      "env": {} // Env vars are set when running the server externally
+      }
+      // 'env' is usually not needed here as env vars are set when running the server externally
     }
   }
 }
@@ -157,7 +158,7 @@ Build the image first: `docker build -t your-dockerhub-username/mcp-server-yapi:
       "command": "docker",
       "args": [
         "run", "-i", "--rm",
-        "-e", "YAPI_BASE_URL=YOUR_YAPI_INSTANCE_URL",
+        "-e", "YAPI_BASE_URL=https://yapi.example.com", // Correct base URL
         "-e", "YAPI_PROJECT_TOKEN=YOUR_YAPI_PROJECT_TOKEN",
         "your-dockerhub-username/mcp-server-yapi:latest", // Use your image name
         "--transport", "stdio" // Explicitly run in stdio mode inside container
@@ -174,7 +175,7 @@ Start the container:
 # Replace port 3000 if you used a different one
 docker run -d --rm --name yapi-mcp-sse \
   -p 3000:3000 \
-  -e YAPI_BASE_URL="YOUR_YAPI_INSTANCE_URL" \
+  -e YAPI_BASE_URL="https://yapi.example.com" \
   -e YAPI_PROJECT_TOKEN="YOUR_YAPI_PROJECT_TOKEN" \
   -e PORT="3000" \
   your-dockerhub-username/mcp-server-yapi:latest \
@@ -204,8 +205,8 @@ Use the [MCP Inspector](https://github.com/modelcontextprotocol/inspector) to te
 **For STDIO:**
 
 ```bash
-# Ensure environment variables are set
-export YAPI_BASE_URL="..."
+# Ensure environment variables are set with the CORRECT base URL
+export YAPI_BASE_URL="https://yapi.example.com"
 export YAPI_PROJECT_TOKEN="..."
 
 # Run inspector pointing to the built script

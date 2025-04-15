@@ -13,18 +13,22 @@ const optionsDefinition = {
   transport: {
     type: 'string' as const,
     short: 't',
+    description: "Transport mode: 'stdio' or 'sse'.",
   },
   port: {
     type: 'string' as const,
     short: 'p',
+    description: "Port for SSE transport.",
   },
   help: {
     type: 'boolean' as const,
     short: 'h',
+    description: 'Show this help message.',
   },
 };
 
 function printUsage() {
+    // Use console.error for usage/help output as it's not protocol data
     console.error(`
 Usage: mcp-server-yapi [options]
 
@@ -36,7 +40,7 @@ Options:
   -h, --help              Show this help message
 
 Environment Variables:
-  YAPI_BASE_URL           (Required) Base URL of the YAPI instance (e.g., http://yapi.example.com)
+  YAPI_BASE_URL           (Required) Base URL of the YAPI instance (e.g., http://yapi.example.com, without /api)
   YAPI_PROJECT_TOKEN      (Required) Project token for YAPI API access
   PORT                    (Optional) Default port for SSE transport if --port is not set.
                           If PORT is set and --transport is not, defaults to 'sse'.
@@ -52,7 +56,7 @@ let parsedArgs;
 try {
   parsedArgs = parseArgs({
     options: optionsDefinition,
-    allowPositionals: true,
+    allowPositionals: false, // No positional arguments expected
     strict: true
   });
 } catch (e) {
@@ -79,10 +83,7 @@ const ssePort = parseInt(ssePortString, 10);
 async function main() {
   let yapiService: YapiService;
   try {
-    // These checks are now inside the constructor, but good practice to check early
-    if (!YAPI_BASE_URL || !YAPI_PROJECT_TOKEN) {
-        throw new ConfigurationError("YAPI_BASE_URL and YAPI_PROJECT_TOKEN environment variables must be set.");
-    }
+    // Environment variable check happens inside YapiService constructor now
     yapiService = new YapiService(YAPI_BASE_URL, YAPI_PROJECT_TOKEN);
   } catch (error) {
     if (error instanceof ConfigurationError) {
@@ -104,13 +105,15 @@ async function main() {
            printUsage();
            process.exit(1);
       }
-      console.log(`Starting server in SSE mode on port ${ssePort}...`);
+      // Use console.error for server status logs
+      console.error(`Starting server in SSE mode on port ${ssePort}...`);
       httpServer = runSseServer(mcpServer, yapiService, ssePort);
     } else if (transportMode === 'stdio') {
-      console.log("Starting server in STDIO mode...");
+      // Use console.error for server status logs
+      console.error("Starting server in STDIO mode...");
       await runStdioServer(mcpServer, yapiService);
     } else {
-      console.error(`Invalid transport mode: '${args.transport}'. Use 'stdio' or 'sse'.`);
+      console.error(`Invalid transport mode: '${transportMode}'. Use 'stdio' or 'sse'.`);
       printUsage();
       process.exit(1);
     }
@@ -130,7 +133,14 @@ async function main() {
       if (httpServer) {
         console.error("Closing HTTP server...");
         await new Promise<void>((resolve, reject) => {
+          // Added a timeout for server closing
+          const timeoutId = setTimeout(() => {
+            console.error("HTTP server close timeout reached, forcing exit.");
+            reject(new Error("Server close timeout"));
+          }, 5000); // 5 seconds timeout
+
           httpServer!.close((err) => {
+            clearTimeout(timeoutId); // Clear the timeout if close finishes normally
             if (err) {
               console.error("Error closing HTTP server:", err);
               reject(err);
@@ -139,14 +149,9 @@ async function main() {
               resolve();
             }
           });
-           // Set a timeout for graceful shutdown
-           setTimeout(() => {
-               console.error("HTTP server close timeout reached, forcing exit.");
-               reject(new Error("Server close timeout"));
-           }, 5000).unref(); // Allow node to exit if this is the only thing running
         }).catch(err => {
             console.error("Forcing exit due to shutdown error/timeout:", err);
-            process.exit(1);
+            process.exit(1); // Force exit on timeout/error during close
         });
       }
       console.error("Shutdown complete.");

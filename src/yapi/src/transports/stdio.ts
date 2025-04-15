@@ -1,6 +1,6 @@
 import { Server as McpServer } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { YapiService } from "../yapiService.js"; // Assuming yapiService provides needed context if required
+import { YapiService } from "../yapiService.js";
 
 /**
  * Starts the MCP server using the STDIO transport.
@@ -11,6 +11,7 @@ export async function runStdioServer(server: McpServer, yapiService: YapiService
     const transport = new StdioServerTransport();
     try {
         await server.connect(transport);
+        // Use console.error for status messages, not console.log
         console.error("YAPI MCP Server running on stdio");
         console.error(`Connected to YAPI instance: ${yapiService.getBaseUrl()}`);
     } catch (error) {

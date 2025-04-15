@@ -26,6 +26,7 @@ export function runSseServer(mcpServer: McpServer, yapiService: YapiService, por
     }));
     app.use((req: Request, res: Response, next: NextFunction) => {
         const startTime = Date.now();
+        // Use console.error for operational logging
         console.error(`[HTTP Request] ${req.method} ${req.originalUrl} from ${req.ip}`);
         res.on('finish', () => {
             const duration = Date.now() - startTime;
@@ -38,51 +39,54 @@ export function runSseServer(mcpServer: McpServer, yapiService: YapiService, por
     app.get('/sse', async (req: Request, res: Response) => {
         console.error(`[SSE] New client connecting... IP: ${req.ip}`);
 
-        const postMessagesUrl = '/messages';
+        const postMessagesUrl = '/messages'; // Relative path for messages
         let transport: SSEServerTransport | null = null;
 
         try {
+            // Initialize transport, passing the response object to handle SSE setup
             transport = new SSEServerTransport(postMessagesUrl, res);
             const sessionId = transport.sessionId;
             activeTransports[sessionId] = transport;
-            console.log(`[SSE] Client connected. Session ID: ${sessionId}`);
+            console.error(`[SSE] Client connected. Session ID: ${sessionId}`);
 
+            // Handle client disconnect
             req.on('close', () => {
                 console.error(`[SSE] Client disconnected: ${sessionId}`);
                 if (activeTransports[sessionId]) {
-                    // Removed mcpServer.disconnect(activeTransports[sessionId]);
-                    // The SDK handles cleanup internally when transport closes
+                    // Let the SDK handle closing the transport implicitly on req close
                     delete activeTransports[sessionId];
-                    console.log(`[SSE] Cleaned up transport map for ${sessionId}`);
+                    console.error(`[SSE] Cleaned up transport map for ${sessionId}`);
                 } else {
                      console.warn(`[SSE] Attempted cleanup for non-existent transport: ${sessionId}`);
                 }
+                // No explicit server.disconnect needed here if SDK manages it on transport close
             });
 
+            // Connect MCP Server to this specific transport
             await mcpServer.connect(transport);
-            console.log(`[MCP] Server connected via SSE transport for session: ${sessionId}`);
+            console.error(`[MCP] Server connected via SSE transport for session: ${sessionId}`);
 
         } catch (error) {
             console.error(`[SSE/MCP Connect Error] Session ${transport?.sessionId || 'unknown'}:`, error);
             if (transport && activeTransports[transport.sessionId]) {
                  delete activeTransports[transport.sessionId];
             }
+            // Try to send an error response if headers not already sent
             if (!res.headersSent) {
                 res.status(500).send({ error: 'Server connection setup failed' });
             } else if (!res.writableEnded) {
-                 res.end();
+                 res.end(); // Close the connection if possible
             }
         }
     });
 
     // --- Messages Endpoint (/messages) ---
-    // Explicitly type the handler to return Promise<void> to satisfy express types
+    // Handles incoming messages from the client for a specific session
     app.post('/messages', express.raw({ type: 'application/json-rpc', limit: '10mb' }), async (req: Request, res: Response): Promise<void> => {
         const sessionId = req.query.sessionId as string;
 
         if (!sessionId) {
             console.error("[POST /messages] Error: Missing sessionId query parameter");
-            // Ensure response is sent and function exits
             res.status(400).json({ error: 'Missing sessionId query parameter' });
             return;
         }
@@ -90,23 +94,24 @@ export function runSseServer(mcpServer: McpServer, yapiService: YapiService, por
         const transport = activeTransports[sessionId];
         if (!transport) {
             console.error(`[POST /messages] Error: No active transport found for sessionId: ${sessionId}`);
-             // Ensure response is sent and function exits
             res.status(404).json({ error: `No active transport found for sessionId: ${sessionId}` });
             return;
         }
 
-        console.log(`[POST /messages] Handling message for session: ${sessionId}`);
+        console.error(`[POST /messages] Handling message for session: ${sessionId}`);
         try {
+            // Delegate message handling to the specific transport instance
             await transport.handlePostMessage(req, res);
-            // Response is handled by handlePostMessage, nothing more needed here
+            // handlePostMessage takes care of sending the response
         } catch (error) {
             console.error(`[POST /messages] Error handling message for session ${sessionId}:`, error);
             if (!res.headersSent) {
                  res.status(500).json({ error: 'Internal Server Error handling message' });
+            } else if (!res.writableEnded){
+                 // Attempt to close the connection if possible
+                 res.end();
             }
-            // If headers were sent, handlePostMessage likely already sent an error response
         }
-        // Explicit return is not strictly necessary for async void, but can help clarity
         return;
     });
 
@@ -118,6 +123,7 @@ export function runSseServer(mcpServer: McpServer, yapiService: YapiService, por
 
 
     // --- Express Global Error Handler ---
+    // Catches errors from middleware or route handlers
     app.use((err: any, req: Request, res: Response, next: NextFunction) => {
         console.error("[Express Global Error Handler]", err);
         const statusCode = err.status || err.statusCode || 500;
@@ -126,6 +132,7 @@ export function runSseServer(mcpServer: McpServer, yapiService: YapiService, por
             res.status(statusCode).json({ error: message });
         } else {
             console.error("Error occurred after headers were sent. Cannot send error response.");
+            // Attempt to close the connection if still open
             if (!res.writableEnded) {
                  res.end();
             }
@@ -136,12 +143,14 @@ export function runSseServer(mcpServer: McpServer, yapiService: YapiService, por
     // --- Start Listening ---
     const httpServer = http.createServer(app);
     httpServer.listen(port, () => {
-        console.log(`YAPI MCP Server (SSE) running on http://localhost:${port}`);
-        console.log(`SSE Endpoint: /sse`);
-        console.log(`Messages Endpoint: /messages`);
-        console.log(`Connected to YAPI instance: ${yapiService.getBaseUrl()}`);
+        // Use console.error for server status logs
+        console.error(`YAPI MCP Server (SSE) running on http://localhost:${port}`);
+        console.error(`SSE Endpoint: /sse`);
+        console.error(`Messages Endpoint: /messages`);
+        console.error(`Connected to YAPI instance: ${yapiService.getBaseUrl()}`);
     });
 
+    // Handle server errors like EADDRINUSE
     httpServer.on('error', (error: NodeJS.ErrnoException) => {
         if (error.syscall !== 'listen') throw error;
         switch (error.code) {
@@ -159,5 +168,6 @@ export function runSseServer(mcpServer: McpServer, yapiService: YapiService, por
         }
     });
 
+    // Return the server instance for graceful shutdown handling
     return httpServer;
 }
