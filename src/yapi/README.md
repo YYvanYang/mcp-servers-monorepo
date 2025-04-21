@@ -1,229 +1,149 @@
 # YAPI MCP Server
 
-A Model Context Protocol (MCP) server for interacting with YAPI instances. This server allows LLM applications like Claude Desktop to retrieve API documentation details stored in a YAPI project. It supports both STDIO and SSE transports.
+This project provides a Model Context Protocol (MCP) server that acts as a bridge between MCP clients (like LLM applications or IDE extensions) and a YAPI instance. It allows clients to query YAPI interface information using standardized MCP tools.
 
-## Features
+This server supports both **stdio** and **Streamable HTTP** transports.
 
-- Connects to a specific YAPI instance and project using configuration.
-- Provides tools to query YAPI for:
-    - Detailed information about a specific API interface.
-    - A list of interfaces within a specific category (with pagination).
-    - The entire API menu structure (categories and interfaces) for the project.
-    - Basic information about the project itself.
-- Securely handles YAPI project tokens via environment variables.
-- Returns data in a structured JSON format suitable for LLM processing.
-- Supports both STDIO (for local, single-client use) and SSE (for potentially remote, multi-client use) transports via command-line arguments.
+**Features:**
 
-## Tools Provided
+*   Connects to a specified YAPI instance using a project token.
+*   Provides MCP tools to:
+    *   Get detailed information for a specific YAPI interface (`yapi_get_interface_details`).
+    *   List interfaces within a specific category, with pagination (`yapi_list_interfaces_by_category`).
+    *   Retrieve the full project interface menu (categories and basic interface info) (`yapi_get_project_interface_menu`).
+    *   Fetch basic information about the configured YAPI project (`yapi_get_project_info`).
+*   Supports connection via:
+    *   **stdio:** For direct integration where the client launches the server as a subprocess.
+    *   **Streamable HTTP:** The standard MCP HTTP transport, allowing the server to run independently and handle multiple client connections via a single `/mcp` endpoint (supporting GET, POST, DELETE).
+*   Built with TypeScript and the `@modelcontextprotocol/sdk`.
+*   Includes Docker support for easy deployment.
 
-1.  **`yapi_get_interface_details`**
-    *   **Description**: 获取指定 YAPI 接口的详细信息（包括请求/响应参数、类型、状态等）。
-    *   **Input**: `interface_id` (number): The ID of the YAPI interface.
-    *   **Output**: JSON string containing the detailed interface specification.
+## Prerequisites
 
-2.  **`yapi_list_interfaces_by_category`**
-    *   **Description**: 获取 YAPI 中指定分类下的所有接口列表（仅包含基本信息如名称、路径、方法）。支持分页。
-    *   **Input**:
-        *   `category_id` (number): The ID of the YAPI category.
-        *   `page` (number, optional, default: 1): Page number for pagination.
-        *   `limit` (number, optional, default: 10): Number of items per page.
-    *   **Output**: JSON string containing the list of interfaces and pagination info (`count`, `total`, `list`).
+*   Node.js (v18.0.0 or later)
+*   npm (usually comes with Node.js)
+*   Access to a YAPI instance and a Project Token.
 
-3.  **`yapi_get_project_interface_menu`**
-    *   **Description**: 获取当前 YAPI 项目的完整接口菜单，包含所有分类及其下的接口列表（仅含基本信息）。
-    *   **Input**: None.
-    *   **Output**: JSON string representing the project's menu structure.
+## Building the Server
 
-4.  **`yapi_get_project_info`**
-    *   **Description**: 获取当前配置 Token 所对应 YAPI 项目的基本信息。
-    *   **Input**: None.
-    *   **Output**: JSON string containing basic project details.
-
-## Setup
-
-### Prerequisites
-
--   Node.js v18.0.0 or later.
--   Access to a YAPI instance and a project token with read permissions.
-
-### Environment Variables
-
-This server requires the following environment variables to be set when running:
-
--   **`YAPI_BASE_URL`**: The **base URL** of your YAPI instance (e.g., `http://yapi.yourcompany.com` or `https://yapi.internal.net`). **Important:** Do *not* include `/api`, `/project/`, or any path beyond the domain/base path.
--   **`YAPI_PROJECT_TOKEN`**: The token for the specific YAPI project you want to access. Find this in your YAPI project settings under "Tokens".
--   `PORT` (Optional, for SSE mode): The port number for the SSE server to listen on. Defaults to 3000. Can also be set via `--port` argument.
-
-### Command-Line Arguments
-
--   `--transport <mode>` or `-t <mode>`: Specifies the transport mode. Use `stdio` (default) or `sse`.
--   `--port <number>` or `-p <number>`: Specifies the port for the SSE server (default: 3000 or `PORT` env var). Ignored if transport is `stdio`.
--   `--help` or `-h`: Displays usage instructions.
-
-## Usage
-
-### Running the Server
-
-**1. Build the server:**
-
-```bash
-cd /path/to/mcp-servers-monorepo
-npm install # Install dependencies for all workspaces
-npm run build -w @mcp-servers/yapi # Build only the yapi package
-```
-
-**2. Set Environment Variables:**
-
-```bash
-# Example:
-export YAPI_BASE_URL="https://yapi.example.com" # Correct Base URL
-export YAPI_PROJECT_TOKEN="YOUR_YAPI_PROJECT_TOKEN"
-# export PORT=4000 # Optional for SSE
-```
-
-**3. Run:**
-
-*   **STDIO Mode (Default):**
+1.  **Clone the repository (if you haven't already):**
     ```bash
-    node src/yapi/dist/index.js
-    # or explicitly
-    node src/yapi/dist/index.js --transport stdio
+    # Assuming you are in the monorepo root
     ```
-
-*   **SSE Mode:**
+2.  **Install dependencies:**
     ```bash
-    node src/yapi/dist/index.js --transport sse
-    # or specify a port
-    node src/yapi/dist/index.js --transport sse --port 4000
+    npm ci
     ```
-
-### Usage with Claude Desktop
-
-Add the following configuration to your `claude_desktop_config.json` file.
-
-*Replace placeholders with your actual paths, **correct** YAPI Base URL, and token.*
-
-**STDIO Mode (Recommended for local single use):**
-
-```json
-{
-  "mcpServers": {
-    "yapi-stdio": {
-      "command": "node",
-      "args": [
-        "/absolute/path/to/mcp-servers-monorepo/src/yapi/dist/index.js",
-        "--transport", "stdio" // Explicitly set stdio
-      ],
-      "env": {
-        "YAPI_BASE_URL": "https://yapi.example.com", // **** Correct base URL ****
-        "YAPI_PROJECT_TOKEN": "YOUR_YAPI_PROJECT_TOKEN"
-        // Add any other necessary environment variables here, e.g., NODE_PATH
-      }
-    }
-  }
-}
-```
-
-**SSE Mode (Requires the server to be running separately):**
-
-First, start the server in SSE mode from your terminal (see "Running the Server" above, ensuring correct environment variables are set).
-
-Then, configure Claude Desktop to connect via HTTP:
-
-```json
-{
-  "mcpServers": {
-    "yapi-sse": {
-      "transport": {
-          "type": "http",
-          "url": "http://localhost:3000/sse" // Adjust port if needed
-      }
-      // 'env' is usually not needed here as env vars are set when running the server externally
-    }
-  }
-}
-```
-
-**Important:** For SSE, ensure the server process is running *before* starting Claude Desktop or managed by a process manager (like `pm2`).
-
-### Using Docker
-
-Build the image first: `docker build -t your-dockerhub-username/mcp-server-yapi:latest src/yapi`
-
-**STDIO Mode with Docker:**
-
-```json
-{
-  "mcpServers": {
-    "yapi-docker-stdio": {
-      "command": "docker",
-      "args": [
-        "run", "-i", "--rm",
-        "-e", "YAPI_BASE_URL=https://yapi.example.com", // **** Correct base URL ****
-        "-e", "YAPI_PROJECT_TOKEN=YOUR_YAPI_PROJECT_TOKEN",
-        "your-dockerhub-username/mcp-server-yapi:latest", // Use your image name
-        "--transport", "stdio" // Explicitly run in stdio mode inside container
-      ]
-    }
-  }
-}
-```
-
-**SSE Mode with Docker (Run Separately):**
-
-Start the container:
-```bash
-# Replace port 3000 if you used a different one
-docker run -d --rm --name yapi-mcp-sse \
-  -p 3000:3000 \
-  -e YAPI_BASE_URL="https://yapi.example.com" \
-  -e YAPI_PROJECT_TOKEN="YOUR_YAPI_PROJECT_TOKEN" \
-  -e PORT="3000" \
-  your-dockerhub-username/mcp-server-yapi:latest \
-  --transport sse # Run in SSE mode
-```
-
-Then configure Claude Desktop as shown in the SSE Mode example above, using `http://localhost:3000/sse`.
-
-## Building
-
-### Local Build
-
-1.  Navigate to the monorepo root: `cd /path/to/mcp-servers-monorepo`
-2.  Install all dependencies: `npm install`
-3.  Build the YAPI package: `npm run build -w @mcp-servers/yapi`
-
-### Docker Build
-
-1.  Navigate to the YAPI package directory: `cd /path/to/mcp-servers-monorepo/src/yapi`
-2.  Build the Docker image: `docker build -t your-dockerhub-username/mcp-server-yapi:latest .`
-    *   Replace `your-dockerhub-username/mcp-server-yapi` with your desired image name.
-
-## Debugging
-
-Use the [MCP Inspector](https://github.com/modelcontextprotocol/inspector) to test the server locally.
-
-**For STDIO:**
-
-```bash
-# Ensure environment variables are set with the CORRECT base URL
-export YAPI_BASE_URL="https://yapi.example.com"
-export YAPI_PROJECT_TOKEN="..."
-
-# Run inspector pointing to the built script
-npx @modelcontextprotocol/inspector node /path/to/mcp-servers-monorepo/src/yapi/dist/index.js --transport stdio
-```
-
-**For SSE:**
-
-1.  Start the server in SSE mode (see "Running the Server").
-2.  Run the inspector connecting to the HTTP endpoint:
+3.  **Build the YAPI server package:**
     ```bash
-    npx @modelcontextprotocol/inspector http://localhost:3000/sse # Adjust port if needed
+    npm run build -w @mcp-servers/yapi
     ```
+    This will compile the TypeScript code into the `src/yapi/dist` directory.
 
-Check Claude Desktop logs for errors: `~/Library/Logs/Claude/mcp-server-yapi-....log` (macOS) or `%APPDATA%\Claude\logs\mcp-server-yapi-....log` (Windows). Server logs (stderr) will also appear in your terminal when running locally or via `docker logs yapi-mcp-sse`.
+## Configuration
+
+The server requires the following environment variables:
+
+*   `YAPI_BASE_URL`: **(Required)** The base URL of your YAPI instance (e.g., `https://yapi.example.com`). Do **not** include `/api` or other paths.
+*   `YAPI_PROJECT_TOKEN`: **(Required)** The token for the YAPI project you want to access. Find this in your YAPI project settings under "Tokens".
+
+Optional configuration:
+
+*   `PORT`: The port for the Streamable HTTP server to listen on. Defaults to `3000`. Setting this variable implies the default transport mode will be `streamable-http`.
+*   **Command-line arguments:**
+    *   `--transport <mode>` or `-t <mode>`: Specify the transport mode explicitly.
+        *   `stdio`: Use standard input/output.
+        *   `streamable-http`: Use the Streamable HTTP transport (listens on `PORT`).
+        *   *(Default: `streamable-http` if `PORT` env var is set or no transport specified, otherwise `stdio` might be inferred in direct execution contexts).*
+    *   `--port <number>` or `-p <number>`: Override the port for Streamable HTTP mode (takes precedence over the `PORT` environment variable).
+    *   `--help` or `-h`: Show help message.
+
+## Running the Server
+
+Make sure you have set the required environment variables (`YAPI_BASE_URL`, `YAPI_PROJECT_TOKEN`).
+
+**1. Using stdio:**
+
+   Ideal for local use with clients that manage the server process (like Cursor configured for stdio).
+
+   ```bash
+   export YAPI_BASE_URL="YOUR_YAPI_URL"
+   export YAPI_PROJECT_TOKEN="YOUR_YAPI_TOKEN"
+   node src/yapi/dist/index.js --transport stdio
+   ```
+
+**2. Using Streamable HTTP:**
+
+   Run the server as a standalone process. Clients connect via HTTP to the `/mcp` endpoint.
+
+   ```bash
+   export YAPI_BASE_URL="YOUR_YAPI_URL"
+   export YAPI_PROJECT_TOKEN="YOUR_YAPI_TOKEN"
+   export PORT=3000 # Optional, defaults to 3000
+
+   # Start the server (defaults to streamable-http if PORT is set)
+   node src/yapi/dist/index.js
+   # Or explicitly:
+   # node src/yapi/dist/index.js --transport streamable-http --port 3000
+   ```
+
+   The server will be available at `http://localhost:3000/mcp` (or the configured port).
+
+**3. Using Docker:**
+
+   Build the Docker image first using the provided script:
+
+   ```bash
+   ./build-yapi-docker.sh
+   ```
+
+   Then run the container:
+
+   *   **Streamable HTTP (Default):**
+       ```bash
+       docker run -d --name yapi-mcp-server \
+         -p 3000:3000 \
+         -e YAPI_BASE_URL="YOUR_YAPI_URL" \
+         -e YAPI_PROJECT_TOKEN="YOUR_YAPI_TOKEN" \
+         yvan919/mcp-server-yapi:latest
+       ```
+       The server will listen on port 3000 inside the container, mapped to port 3000 on your host. Connect clients to `http://localhost:3000/mcp`.
+
+   *   **stdio:**
+       ```bash
+       docker run -i --rm \
+         -e YAPI_BASE_URL="YOUR_YAPI_URL" \
+         -e YAPI_PROJECT_TOKEN="YOUR_YAPI_TOKEN" \
+         yvan919/mcp-server-yapi:latest --transport stdio
+       ```
+       This runs the container interactively using stdio.
+
+## Connecting Clients
+
+*   **stdio:** Configure your MCP client (e.g., in Cursor settings) to launch the server executable (`node src/yapi/dist/index.js --transport stdio`) and provide the necessary environment variables.
+*   **Streamable HTTP:** Configure your MCP client to connect to the server's URL, specifically the `/mcp` endpoint (e.g., `http://localhost:3000/mcp`).
+
+## MCP Tools Provided
+
+*   `yapi_get_interface_details`
+    *   Description: Get details for a specific YAPI interface.
+    *   Input: `{ "interface_id": number }`
+*   `yapi_list_interfaces_by_category`
+    *   Description: List interfaces in a category (paginated).
+    *   Input: `{ "category_id": number, "page"?: number, "limit"?: number }`
+*   `yapi_get_project_interface_menu`
+    *   Description: Get the full interface menu for the project.
+    *   Input: `{}`
+*   `yapi_get_project_info`
+    *   Description: Get basic info for the configured project.
+    *   Input: `{}`
+
+*(All tools are read-only)*
+
+## Development
+
+*   **Watch Mode:** `npm run watch -w @mcp-servers/yapi` to automatically recompile on changes.
 
 ## License
 
-MIT License - see the main [LICENSE](../../LICENSE) file in the repository root.
+MIT License - see [LICENSE](../LICENSE) file.

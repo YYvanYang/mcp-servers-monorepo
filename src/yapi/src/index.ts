@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 
 import { parseArgs } from 'node:util';
-import http from 'http'; // For SSE server instance type
+import http from 'http'; // For Streamable HTTP server instance type
 import { YapiService } from './yapiService.js';
 import { createMcpServer } from './mcp_server.js';
 import { runStdioServer } from './transports/stdio.js';
-import { runSseServer } from './transports/sse.js';
+import { runStreamableHttpServer } from './transports/streamableHttp.js'; // Import the new transport runner
 import { ConfigurationError } from './errors.js';
 
 // --- Argument Parsing Setup ---
@@ -13,12 +13,12 @@ const optionsDefinition = {
   transport: {
     type: 'string' as const,
     short: 't',
-    description: "Transport mode: 'stdio' or 'sse'.",
+    description: "Transport mode: 'stdio' or 'streamable-http'.",
   },
   port: {
     type: 'string' as const,
     short: 'p',
-    description: "Port for SSE transport.",
+    description: "Port for Streamable HTTP transport.",
   },
   help: {
     type: 'boolean' as const,
@@ -33,23 +33,25 @@ function printUsage() {
 Usage: mcp-server-yapi [options]
 
 Options:
-  -t, --transport <mode>  Transport mode: 'stdio' or 'sse'.
-                          (Default: 'stdio' if PORT env var is not set, 'sse' otherwise)
-  -p, --port <number>     Port for SSE transport.
+  -t, --transport <mode>  Transport mode: 'stdio' or 'streamable-http'.
+                          (Default: 'streamable-http' if PORT env var is set or no transport specified, 'stdio' otherwise in specific scenarios if needed)
+  -p, --port <number>     Port for Streamable HTTP transport.
                           (Default: PORT env var or 3000)
   -h, --help              Show this help message
 
 Environment Variables:
   YAPI_BASE_URL           (Required) Base URL of the YAPI instance (e.g., http://yapi.example.com, without /api)
   YAPI_PROJECT_TOKEN      (Required) Project token for YAPI API access
-  PORT                    (Optional) Default port for SSE transport if --port is not set.
-                          If PORT is set and --transport is not, defaults to 'sse'.
+  PORT                    (Optional) Default port for Streamable HTTP transport if --port is not set.
+                          If PORT is set and --transport is not, defaults to 'streamable-http'.
 `);
 }
 
 // --- Determine Defaults based on Environment ---
 const defaultPort = process.env.PORT || '3000';
-const defaultTransport = process.env.PORT ? 'sse' : 'stdio';
+// Default to streamable-http unless explicitly set otherwise, especially if PORT is defined.
+// Stdio is usually explicitly chosen or inferred in specific execution contexts (like direct process launch).
+const defaultTransport = process.env.PORT ? 'streamable-http' : (process.argv.includes('--transport') ? 'stdio' : 'streamable-http'); // Sensible default
 
 // --- Parse Arguments ---
 let parsedArgs;
@@ -57,7 +59,7 @@ try {
   parsedArgs = parseArgs({
     options: optionsDefinition,
     allowPositionals: false, // No positional arguments expected
-    strict: true
+    strict: true // Throw on unknown args
   });
 } catch (e) {
   console.error(`Error parsing arguments: ${e instanceof Error ? e.message : String(e)}`);
@@ -76,8 +78,8 @@ if (args.help) {
 const YAPI_BASE_URL = process.env.YAPI_BASE_URL;
 const YAPI_PROJECT_TOKEN = process.env.YAPI_PROJECT_TOKEN;
 const transportMode = (args.transport || defaultTransport).toLowerCase();
-const ssePortString = args.port || defaultPort;
-const ssePort = parseInt(ssePortString, 10);
+const httpPortString = args.port || defaultPort;
+const httpPort = parseInt(httpPortString, 10);
 
 // --- Main Application Logic ---
 async function main() {
@@ -96,24 +98,25 @@ async function main() {
   }
 
   const mcpServer = createMcpServer(yapiService);
-  let httpServer: http.Server | undefined; // Hold the SSE server instance
+  let httpServer: http.Server | undefined; // Hold the Streamable HTTP server instance
 
   try {
-    if (transportMode === 'sse') {
-      if (isNaN(ssePort) || ssePort <= 0 || ssePort > 65535) {
-           console.error(`Invalid port number: '${ssePortString}'. Port must be between 1 and 65535.`);
+    if (transportMode === 'streamable-http') {
+      if (isNaN(httpPort) || httpPort <= 0 || httpPort > 65535) {
+           console.error(`Invalid port number: '${httpPortString}'. Port must be between 1 and 65535.`);
            printUsage();
            process.exit(1);
       }
       // Use console.error for server status logs
-      console.error(`Starting server in SSE mode on port ${ssePort}...`);
-      httpServer = runSseServer(mcpServer, yapiService, ssePort);
+      console.error(`Starting server in Streamable HTTP mode on port ${httpPort}...`);
+      // runStreamableHttpServer now returns the http.Server instance
+      httpServer = runStreamableHttpServer(mcpServer, yapiService, httpPort);
     } else if (transportMode === 'stdio') {
       // Use console.error for server status logs
       console.error("Starting server in STDIO mode...");
       await runStdioServer(mcpServer, yapiService);
     } else {
-      console.error(`Invalid transport mode: '${transportMode}'. Use 'stdio' or 'sse'.`);
+      console.error(`Invalid transport mode: '${transportMode}'. Use 'stdio' or 'streamable-http'.`);
       printUsage();
       process.exit(1);
     }
@@ -127,6 +130,7 @@ async function main() {
     console.error(`\nReceived ${signal}, initiating graceful shutdown...`);
     try {
       console.error("Closing MCP server connections...");
+      // This should trigger closing of all connected transports
       await mcpServer.close();
       console.error("MCP Server connections closed.");
 

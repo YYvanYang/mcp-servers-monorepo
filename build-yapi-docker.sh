@@ -1,61 +1,65 @@
 #!/bin/bash
 
-# 设置错误时脚本停止执行
+# Set script to exit on error
 set -e
 
-# 显示执行的命令
+# Show commands being executed
 set -x
 
-# 获取脚本所在目录的绝对路径
+# Get script directory absolute path
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
-# 项目根目录（假设脚本在项目根目录下）
+# Project root directory (assuming script is in the root)
 PROJECT_ROOT="$SCRIPT_DIR"
 
-# 确保在项目根目录执行
+# Ensure execution in project root
 cd "$PROJECT_ROOT"
 
-# 清理之前失败的构建 (保持不变)
+# Clean previous failed builds (optional but good practice)
 echo "Cleaning previous failed builds..."
 docker system prune -f
 
-# 检查 node_modules 是否存在，不存在则安装依赖 (保持不变)
+# Install dependencies if node_modules doesn't exist
 if [ ! -d "node_modules" ]; then
   echo "Installing dependencies..."
-  # 最好在项目根目录运行 npm ci
+  # Run npm ci in project root for workspace setup
   npm ci
 fi
 
-# 定义 YAPI 包的路径
+# Define YAPI package paths
 YAPI_SRC_DIR="$PROJECT_ROOT/src/yapi"
 YAPI_DIST_DIR="$YAPI_SRC_DIR/dist"
 
-# 检查是否有未构建的更改 (保持不变)
+# Build YAPI server if dist doesn't exist or TS files are newer
 if [ ! -d "$YAPI_DIST_DIR" ] || [ -n "$(find "$YAPI_SRC_DIR" -name "*.ts" -newer "$YAPI_DIST_DIR" -print -quit)" ]; then
   echo "Building YAPI server..."
   npm run build -w @mcp-servers/yapi
 fi
 
-# 定义镜像名称和标签
-IMAGE_NAME="yvan919/mcp-server-yapi"
-IMAGE_TAG="latest" # 或者使用版本号
+# Define image name and tag
+IMAGE_NAME="yvan919/mcp-server-yapi" # Or your preferred image name
+IMAGE_TAG="latest" # Or use a version number, e.g., 0.3.0
 
-# 定义目标平台
+# Define target platforms
 PLATFORMS="linux/amd64,linux/arm64"
 
-# 构建并推送多平台 Docker 镜像
+# Build and push multi-platform Docker image
 echo "Building and pushing multi-platform Docker image for $PLATFORMS..."
 docker buildx build \
   --platform "$PLATFORMS" \
   -t "$IMAGE_NAME:$IMAGE_TAG" \
   -f "$YAPI_SRC_DIR/Dockerfile" \
   --push \
-  . # 构建上下文是项目根目录
+  . # Build context is the project root
 
 echo "Build and push completed!"
 echo "You can now run the container in the background on supported platforms using:"
-# 在 docker run 命令中添加 -d 标志
-echo "docker run -d --name yapi-mcp-server-sse -p 3000:3000 -e YAPI_BASE_URL='your-yapi-url' -e YAPI_PROJECT_TOKEN='your-project-token' $IMAGE_NAME:$IMAGE_TAG --transport sse"
+# Updated docker run command example for Streamable HTTP
+echo "docker run -d --name yapi-mcp-server -p 3000:3000 -e YAPI_BASE_URL='your-yapi-url' -e YAPI_PROJECT_TOKEN='your-project-token' $IMAGE_NAME:$IMAGE_TAG"
 echo ""
-echo "To view logs: docker logs yapi-mcp-server-sse"
-echo "To stop the container: docker stop yapi-mcp-server-sse"
-echo "To remove the container: docker rm yapi-mcp-server-sse"
+echo "The server will run using Streamable HTTP on port 3000 by default."
+echo "To run using stdio transport instead:"
+echo "docker run -i --rm -e YAPI_BASE_URL='your-yapi-url' -e YAPI_PROJECT_TOKEN='your-project-token' $IMAGE_NAME:$IMAGE_TAG --transport stdio"
+echo ""
+echo "To view logs (for detached container): docker logs yapi-mcp-server"
+echo "To stop the container: docker stop yapi-mcp-server"
+echo "To remove the container: docker rm yapi-mcp-server"
